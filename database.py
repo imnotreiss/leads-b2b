@@ -6,6 +6,7 @@ from pathlib import Path
 DB_PATH = Path(__file__).parent / "leads.db"
 
 STATUS_NOVO = "novo"
+STATUS_SALVO = "salvo"
 STATUS_ENVIADO = "enviado"
 STATUS_NEGOCIACAO = "negociacao"
 STATUS_FECHADO = "fechado"
@@ -22,6 +23,7 @@ STATUS_CONTATADOS = [
 
 STATUS_LABELS = {
     STATUS_NOVO: "Novo",
+    STATUS_SALVO: "Salvo",
     STATUS_ENVIADO: "Enviado",
     STATUS_NEGOCIACAO: "Em Negociação",
     STATUS_FECHADO: "Fechado",
@@ -121,7 +123,10 @@ def get_leads_by_status(status_list: list[str]) -> list[sqlite3.Row]:
 
 
 def update_lead_status(lead_id: int, status: str, observacoes: str | None = None) -> None:
+    """Atualiza o status do lead. `data_contato` só é preenchido quando o novo
+    status representa um contato de fato (não ao apenas salvar o lead)."""
     conn = get_connection()
+    novo_data_contato = datetime.now().isoformat(timespec="seconds") if status in STATUS_CONTATADOS else None
     if observacoes is not None:
         conn.execute(
             """
@@ -129,7 +134,7 @@ def update_lead_status(lead_id: int, status: str, observacoes: str | None = None
             SET status = ?, observacoes = ?, data_contato = COALESCE(data_contato, ?)
             WHERE id = ?
             """,
-            (status, observacoes, datetime.now().isoformat(timespec="seconds"), lead_id),
+            (status, observacoes, novo_data_contato, lead_id),
         )
     else:
         conn.execute(
@@ -138,7 +143,7 @@ def update_lead_status(lead_id: int, status: str, observacoes: str | None = None
             SET status = ?, data_contato = COALESCE(data_contato, ?)
             WHERE id = ?
             """,
-            (status, datetime.now().isoformat(timespec="seconds"), lead_id),
+            (status, novo_data_contato, lead_id),
         )
     conn.commit()
     conn.close()

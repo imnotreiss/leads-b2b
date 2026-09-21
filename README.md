@@ -8,7 +8,7 @@ Sistema Streamlit + SQLite para buscar empresas locais sem site (e com pelo meno
 - `database.py` — schema SQLite (tabela `leads`) e operações de deduplicação/atualização.
 - `api_client.py` — integração com a **Serper.dev Places API** e filtros de qualificação
   (sem site + ≥10 avaliações).
-- `app.py` — interface Streamlit (busca + abas "Novas Pesquisas" e "Mensagens Enviadas").
+- `app.py` — interface Streamlit (busca + abas "Novas Pesquisas", "Leads Salvos" e "Mensagens Enviadas").
 
 O banco `leads.db` é criado automaticamente na primeira execução (`db.init_db()`).
 
@@ -76,8 +76,11 @@ manualmente nas Observações (aba 2) depois de falar com o lead, se aplicável.
 - Filtra apenas empresas **sem site cadastrado** e com **≥10 avaliações**.
 - Deduplicação por `place_id_google` (campo `cid` do Google) ou telefone antes de
   gravar — leads já existentes no banco nunca são reinseridos.
-- Leads marcados como "Mensagem Enviada" saem imediatamente da aba de novos leads
-  (mudança de `status`) e nunca mais reaparecem em buscas futuras, mesmo que a
-  empresa apareça de novo em uma nova pesquisa.
+- Leads marcados como "Salvo" ou "Mensagem Enviada" saem imediatamente da aba de
+  novos leads (mudança de `status`) e nunca mais reaparecem em buscas futuras,
+  mesmo que a empresa apareça de novo em uma nova pesquisa.
+- Aba "Leads Salvos" guarda leads que você quer contatar depois, sem precisar
+  enviar mensagem no mesmo dia — eles continuam disponíveis lá até você marcar
+  como enviado.
 - Aba "Mensagens Enviadas" permite filtrar por status (Enviado, Em Negociação,
   Fechado, Sem Resposta) e editar status/observações de cada lead.

@@ -1,4 +1,6 @@
 """Sistema de captação e gestão de leads B2B (Streamlit + SQLite + Serper.dev Places API)."""
+import sqlite3
+
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
@@ -66,10 +68,51 @@ with st.sidebar:
 
 st.title("📇 Captação e Gestão de Leads B2B")
 
-tab1, tab2 = st.tabs(["🔍 Novas Pesquisas / Leads", "📤 Mensagens Enviadas"])
+tab1, tab2, tab3 = st.tabs(
+    ["🔍 Novas Pesquisas / Leads", "💾 Leads Salvos", "📤 Mensagens Enviadas"]
+)
+
+
+def render_lead_card(lead: sqlite3.Row, show_save_button: bool) -> None:
+    """Renderiza o card de um lead com ações de WhatsApp, salvar e marcar como enviado."""
+    with st.container(border=True):
+        st.subheader(lead["nome"])
+        st.write(f"📍 {lead['endereco'] or lead['cidade']}")
+        st.write(f"🏷️ {lead['nicho']}")
+        st.write(f"⭐ {lead['rating'] or '-'} ({lead['total_reviews'] or 0} avaliações)")
+        st.write(f"📞 {lead['telefone'] or 'Telefone não disponível'}")
+        if lead["email"]:
+            st.write(f"✉️ {lead['email']}")
+        if lead["redes_sociais"]:
+            st.write(f"🌐 {lead['redes_sociais']}")
+
+        botoes = st.columns(3 if show_save_button else 2)
+        with botoes[0]:
+            link = whatsapp_link(lead["telefone"])
+            st.link_button(
+                "📱 WhatsApp",
+                link or "https://wa.me/",
+                width="stretch",
+                disabled=not link,
+            )
+        if show_save_button:
+            with botoes[1]:
+                if st.button("💾 Salvar", key=f"salvar_{lead['id']}", width="stretch"):
+                    db.update_lead_status(lead["id"], db.STATUS_SALVO)
+                    st.rerun()
+            with botoes[2]:
+                if st.button("✅ Enviada", key=f"enviado_{lead['id']}", width="stretch"):
+                    db.update_lead_status(lead["id"], db.STATUS_ENVIADO)
+                    st.rerun()
+        else:
+            with botoes[1]:
+                if st.button("✅ Enviada", key=f"enviado_{lead['id']}", width="stretch"):
+                    db.update_lead_status(lead["id"], db.STATUS_ENVIADO)
+                    st.rerun()
+
 
 # --------------------------------------------------------------------------- #
-# Aba 1: leads ainda não contatados
+# Aba 1: leads novos da pesquisa, ainda não salvos nem contatados
 # --------------------------------------------------------------------------- #
 with tab1:
     novos_leads = db.get_leads_by_status([db.STATUS_NOVO])
@@ -77,43 +120,31 @@ with tab1:
     if not novos_leads:
         st.info("Nenhum lead novo no momento. Use a busca na barra lateral para encontrar empresas.")
     else:
-        st.caption(f"{len(novos_leads)} lead(s) aguardando contato.")
+        st.caption(f"{len(novos_leads)} lead(s) aguardando triagem.")
         cols = st.columns(2)
         for i, lead in enumerate(novos_leads):
             with cols[i % 2]:
-                with st.container(border=True):
-                    st.subheader(lead["nome"])
-                    st.write(f"📍 {lead['endereco'] or lead['cidade']}")
-                    st.write(f"🏷️ {lead['nicho']}")
-                    st.write(f"⭐ {lead['rating'] or '-'} ({lead['total_reviews'] or 0} avaliações)")
-                    st.write(f"📞 {lead['telefone'] or 'Telefone não disponível'}")
-                    if lead["email"]:
-                        st.write(f"✉️ {lead['email']}")
-                    if lead["redes_sociais"]:
-                        st.write(f"🌐 {lead['redes_sociais']}")
-
-                    b1, b2 = st.columns(2)
-                    with b1:
-                        link = whatsapp_link(lead["telefone"])
-                        st.link_button(
-                            "📱 Chamar no WhatsApp",
-                            link or "https://wa.me/",
-                            width="stretch",
-                            disabled=not link,
-                        )
-                    with b2:
-                        if st.button(
-                            "✅ Mensagem Enviada",
-                            key=f"enviado_{lead['id']}",
-                            width="stretch",
-                        ):
-                            db.update_lead_status(lead["id"], db.STATUS_ENVIADO)
-                            st.rerun()
+                render_lead_card(lead, show_save_button=True)
 
 # --------------------------------------------------------------------------- #
-# Aba 2: leads já contatados
+# Aba 2: leads salvos para contatar depois (não reaparecem em buscas futuras)
 # --------------------------------------------------------------------------- #
 with tab2:
+    salvos = db.get_leads_by_status([db.STATUS_SALVO])
+
+    if not salvos:
+        st.info("Nenhum lead salvo. Use o botão 💾 Salvar na aba de novos leads.")
+    else:
+        st.caption(f"{len(salvos)} lead(s) salvos para contatar quando quiser.")
+        cols = st.columns(2)
+        for i, lead in enumerate(salvos):
+            with cols[i % 2]:
+                render_lead_card(lead, show_save_button=False)
+
+# --------------------------------------------------------------------------- #
+# Aba 3: leads já contatados
+# --------------------------------------------------------------------------- #
+with tab3:
     filtro_labels = ["Todos"] + [db.STATUS_LABELS[s] for s in db.STATUS_CONTATADOS]
     filtro = st.selectbox("Filtrar por status", filtro_labels)
 
