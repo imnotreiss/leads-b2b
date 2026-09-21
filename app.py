@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
 import database as db
-from api_client import search_and_filter_leads, whatsapp_link
+from api_client import filter_and_map_leads, qualification_stats, search_places, whatsapp_link
 
 st.set_page_config(page_title="Captação de Leads B2B", page_icon="📇", layout="wide")
 db.init_db()
@@ -40,16 +40,26 @@ with st.sidebar:
         else:
             with st.spinner("Buscando e qualificando empresas..."):
                 try:
-                    leads = search_and_filter_leads(nicho, cidade, api_key)
+                    raw_places = search_places(nicho, cidade, api_key)
+                    stats = qualification_stats(raw_places)
+                    leads = filter_and_map_leads(raw_places, nicho, cidade)
+
                     novos, duplicados = 0, 0
                     for lead in leads:
                         if db.insert_lead_if_new(lead):
                             novos += 1
                         else:
                             duplicados += 1
+
                     st.success(
                         f"Busca concluída: {len(leads)} leads qualificados encontrados "
                         f"({novos} novos, {duplicados} já existentes no banco)."
+                    )
+                    st.caption(
+                        f"De {stats['total_bruto']} empresas encontradas no Google Maps: "
+                        f"{stats['descartados_com_site']} já tinham site, "
+                        f"{stats['descartados_poucas_reviews']} tinham menos de 10 avaliações, "
+                        f"{stats['qualificados']} passaram nos dois filtros."
                     )
                 except Exception as exc:  # noqa: BLE001
                     st.error(f"Erro ao buscar leads: {exc}")

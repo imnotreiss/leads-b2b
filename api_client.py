@@ -96,6 +96,25 @@ def filter_and_map_leads(raw_places: list[dict], nicho: str, cidade: str) -> lis
     return leads
 
 
+def qualification_stats(raw_places: list[dict]) -> dict:
+    """Detalha quantos resultados brutos foram descartados por cada critério,
+    para explicar por que a lista final de leads qualificados é menor que o total buscado."""
+    total = len(raw_places)
+    com_site = sum(1 for p in raw_places if not _has_no_website(p))
+    poucas_reviews = sum(
+        1 for p in raw_places if _has_no_website(p) and not _has_enough_reviews(p)
+    )
+    qualificados = sum(
+        1 for p in raw_places if _has_no_website(p) and _has_enough_reviews(p)
+    )
+    return {
+        "total_bruto": total,
+        "descartados_com_site": com_site,
+        "descartados_poucas_reviews": poucas_reviews,
+        "qualificados": qualificados,
+    }
+
+
 def search_and_filter_leads(nicho: str, cidade: str, api_key: str) -> list[dict]:
     raw_places = search_places(nicho, cidade, api_key)
     return filter_and_map_leads(raw_places, nicho, cidade)
