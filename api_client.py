@@ -28,9 +28,32 @@ def whatsapp_link(telefone: str) -> str:
     return f"https://wa.me/{digits}" if digits else ""
 
 
+REQUEST_TIMEOUT = 35  # segundos; a Serper.dev pode demorar em buscas com muitos resultados
+PAGE_RETRIES = 2  # tentativas por página antes de desistir dela
+
+
+def _fetch_page(payload: dict, headers: dict) -> list[dict] | None:
+    """Busca uma página, tentando novamente em caso de timeout/erro de rede.
+    Retorna None se todas as tentativas falharem (em vez de propagar a exceção)."""
+    for attempt in range(PAGE_RETRIES):
+        try:
+            response = requests.post(
+                SERPER_PLACES_URL, json=payload, headers=headers, timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return response.json().get("places", [])
+        except requests.exceptions.RequestException:
+            if attempt == PAGE_RETRIES - 1:
+                return None
+    return None
+
+
 def search_places(nicho: str, cidade: str, api_key: str) -> list[dict]:
     """Busca estabelecimentos na Serper.dev Places API, paginando até atingir
-    o alvo de resultados brutos ou esgotar as páginas disponíveis."""
+    o alvo de resultados brutos ou esgotar as páginas disponíveis.
+
+    Se uma página falhar mesmo após retentativas, a busca é encerrada e o que já
+    foi coletado até ali é retornado, em vez de derrubar a pesquisa inteira."""
     if not api_key:
         raise ValueError("Informe a chave de API da Serper.dev na barra lateral.")
 
@@ -40,10 +63,14 @@ def search_places(nicho: str, cidade: str, api_key: str) -> list[dict]:
 
     for page in range(1, MAX_PAGES + 1):
         payload = {"q": query, "gl": "br", "hl": "pt-br", "page": page}
-        response = requests.post(SERPER_PLACES_URL, json=payload, headers=headers, timeout=20)
-        response.raise_for_status()
-        data = response.json()
-        places = data.get("places", [])
+        places = _fetch_page(payload, headers)
+
+        if places is None:
+            if not raw_results:
+                raise ConnectionError(
+                    "A Serper.dev não respondeu a tempo. Tente novamente em alguns segundos."
+                )
+            break  # mantém os resultados já coletados nas páginas anteriores
         if not places:
             break
         raw_results.extend(places)
